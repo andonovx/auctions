@@ -18,7 +18,7 @@ Run npm install in order to install all the dependencies.
 
 In order to run the tests locally you must install the Ganache or some other server that will set up a blockchain locally.
 
-Another solution is to connect to a tesnet - truffle-config.js already has the configuration for Polygon Mumbai testnet, just aquire a web3 provider (e.g. through chainstack - https://chainstack.com/), and 
+Another solution is to connect to a tesnet - truffle-config.js already has the configuration for Polygon Mumbai testnet, just aquire a web3 provider (e.g. through chainstack - https://chainstack.com/), and paste the websocket provider url into the truffle-config configuration file (mumbai configuration).
 
 # COMPILING 
 
