@@ -56,7 +56,7 @@ truffle run verify Broker --network mumbai
 
 The solution could further be improved by introducing an intermediary backend that would store data regarding the auctions and bids. This would cut down the gas costs of all the actors in the auctions significantly. 
 
-ZK signatures would be introduced, NFT owners would sign auction details, while bidders would sign the bid details.
+Data signatures would be introduced, NFT owners would sign auction details, while bidders would sign the bid details.
 
 Bidders could make a one-time approval of their ERC-20 tokens, to the Broker contract.
 Sellers/Nft owners approve their ERC1155 tokens to the Broker contract once. 
