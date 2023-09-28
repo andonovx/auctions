@@ -24,6 +24,7 @@ contract Broker is ERC1155Holder {
     struct Bid {
         address bidder;
         uint bidAmount;
+        bool withdrawn;
     }
 
     mapping (uint => Auction) public auctions;
@@ -35,6 +36,7 @@ contract Broker is ERC1155Holder {
     event AuctionCreated(address indexed nftContract, uint indexed nftId, uint indexed auctionId);
     event AuctionClosed(uint indexed auctionId, address indexed tokenAddress, uint price, address winner);
     event BidMade(uint indexed auctionId, address tokenAddress, uint price);
+    event Refund(uint indexed auctionId, address indexed refundedAddress, uint bidId, uint amount);
 
     modifier onlyOwner {
         require(msg.sender == owner, 'You are not the owner.');
@@ -46,27 +48,23 @@ contract Broker is ERC1155Holder {
 
         require(!auction.closed, "The auction is already closed");
         require(block.timestamp > auction.endTime, "The auction has not ended yet");
-        require(auction.bidCount != 0, "This auction can not be closed since it has no bids");
-        
-        Bid memory bid;
 
-        // Returning tokens to bidders who have lost the auction
-        for (uint i=0; i < auctions[auctionId].bidCount - 1;) { 
-            bid = bids[auctionId][i];
-            auction.token.transfer(bid.bidder, bid.bidAmount);
-            unchecked {
-                i++;
-            }
-        }
+        if (auction.bidCount == 0) {
+            auction.closed = true;
+            emit AuctionClosed(auctionId, address(auction.nftContract), 0, address(0x0));
+        } else {
+            bids[auctionId][auction.bidCount - 1].withdrawn = true;
+            auctions[auctionId].closed = true;
 
-        bid = bids[auctionId][auction.bidCount - 1];
+            Bid memory bid = bids[auctionId][auction.bidCount - 1];
+    
+            // Transferring tokens to auction owner
+            auction.token.transfer(owner, bid.bidAmount);
+            // Transferring the nft to the auction winner
+            auction.nftContract.safeTransferFrom(address(this), bid.bidder, auction.nftId, auction.amount, "");
 
-        // Transferring tokens to auction owner
-        auction.token.transfer(owner, bid.bidAmount);
-        // Transferring the nft to the auction winner
-        auction.nftContract.safeTransferFrom(address(this), bid.bidder, auction.nftId, auction.amount, "");
-        auctions[auctionId].closed = true;
-        emit AuctionClosed(auctionId, address(auction.nftContract), bid.bidAmount, bid.bidder);
+            emit AuctionClosed(auctionId, address(auction.nftContract), bid.bidAmount, bid.bidder);
+        }        
     }
 
     function createAuction(address tokenAddress, uint startPrice, address nftContractAddress, uint nftId, uint amount, uint endTime) external onlyOwner {
@@ -105,21 +103,40 @@ contract Broker is ERC1155Holder {
             require(amount > bids[auctionId][auction.bidCount - 1].bidAmount, "The bid must be higher than the current highest bid");
         }
 
-        // Transferring erc20 tokens to Broker contract
-        auction.token.transferFrom(msg.sender, address(this), amount);
-
         Bid memory bid = Bid(
             {
                 bidAmount: amount, 
-                bidder: msg.sender
+                bidder: msg.sender, 
+                withdrawn: false
             }
         );
 
         auctions[auctionId].bidCount++;
+
         // Storing bid details on-chain
         bids[auctionId][auction.bidCount] = bid;
 
+        // Transferring erc20 tokens to Broker contract
+        auction.token.transferFrom(msg.sender, address(this), amount);
+        
         emit BidMade(auctionId, address(auction.nftContract), amount);
+    }
+
+    function refundLostBid(uint auctionId, uint bidId) external {
+        Auction memory auction = auctions[auctionId];
+        require(auction.closed, "Auction not closed");
+
+        Bid memory bid = bids[auctionId][bidId];
+
+        require(bid.bidder == msg.sender, "You are not the bidder");
+        require(!bid.withdrawn, "Bid has already been refunded");
+
+        bids[auctionId][bidId].withdrawn = true;
+
+        // Transferring erc20 tokens back to the bidder
+        auction.token.transferFrom(address(this), bid.bidder, bid.bidAmount);
+
+        emit Refund(auctionId, bid.bidder, bidId, bid.bidAmount);
     }
 
     constructor(address _owner) {
